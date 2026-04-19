@@ -45,7 +45,27 @@ if command -v claude >/dev/null 2>&1; then
   done
 fi
 
-# 4. Materialize GCP service-account credentials from Codespaces secret, if set.
+# 4. Install Google Cloud SDK if missing
+if ! command -v gcloud >/dev/null 2>&1 && [[ ! -x "$HOME/google-cloud-sdk/bin/gcloud" ]]; then
+  log "Installing Google Cloud SDK..."
+  curl -sSL https://sdk.cloud.google.com > /tmp/gcloud-install.sh
+  bash /tmp/gcloud-install.sh --disable-prompts --install-dir="$HOME" >/dev/null
+  rm -f /tmp/gcloud-install.sh
+  log "Google Cloud SDK installed to $HOME/google-cloud-sdk"
+else
+  log "Google Cloud SDK already installed."
+fi
+
+# Ensure gcloud is on PATH in new shells
+for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  [[ -f "$rc" ]] || continue
+  if ! grep -q "google-cloud-sdk/path.bash.inc" "$rc" 2>/dev/null; then
+    printf '\n[ -f "$HOME/google-cloud-sdk/path.bash.inc" ] && source "$HOME/google-cloud-sdk/path.bash.inc"\n' >> "$rc"
+    log "Added gcloud PATH source to $rc"
+  fi
+done
+
+# 5. Materialize GCP service-account credentials from Codespaces secret, if set.
 # The secret itself is stored in GitHub Codespaces secrets, NOT in this repo.
 # Scope the secret to the repos where you need it at
 # https://github.com/settings/codespaces
@@ -56,6 +76,15 @@ if [[ -n "${SERVICE_ACCOUNT_KEY:-}" ]]; then
   printf '%s' "$SERVICE_ACCOUNT_KEY" > "$GCP_KEY_PATH"
   chmod 600 "$GCP_KEY_PATH"
   log "Wrote GCP service-account key to $GCP_KEY_PATH"
+
+  # Activate the service account in gcloud, if available
+  GCLOUD_BIN="$(command -v gcloud || true)"
+  [[ -z "$GCLOUD_BIN" && -x "$HOME/google-cloud-sdk/bin/gcloud" ]] && GCLOUD_BIN="$HOME/google-cloud-sdk/bin/gcloud"
+  if [[ -n "$GCLOUD_BIN" ]]; then
+    "$GCLOUD_BIN" auth activate-service-account --key-file="$GCP_KEY_PATH" >/dev/null 2>&1 \
+      && log "Activated gcloud service account." \
+      || log "gcloud service-account activation failed (non-fatal)."
+  fi
 
   # Persist GOOGLE_APPLICATION_CREDENTIALS so gcloud/SDKs pick it up in new shells
   for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
