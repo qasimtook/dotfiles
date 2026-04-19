@@ -45,4 +45,29 @@ if command -v claude >/dev/null 2>&1; then
   done
 fi
 
+# 4. Materialize GCP service-account credentials from Codespaces secret, if set.
+# The secret itself is stored in GitHub Codespaces secrets, NOT in this repo.
+# Scope the secret to the repos where you need it at
+# https://github.com/settings/codespaces
+if [[ -n "${SERVICE_ACCOUNT_KEY:-}" ]]; then
+  GCP_KEY_PATH="$HOME/.config/gcloud/service-account.json"
+  mkdir -p "$(dirname "$GCP_KEY_PATH")"
+  umask 077
+  printf '%s' "$SERVICE_ACCOUNT_KEY" > "$GCP_KEY_PATH"
+  chmod 600 "$GCP_KEY_PATH"
+  log "Wrote GCP service-account key to $GCP_KEY_PATH"
+
+  # Persist GOOGLE_APPLICATION_CREDENTIALS so gcloud/SDKs pick it up in new shells
+  for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    [[ -f "$rc" ]] || continue
+    if ! grep -q "GOOGLE_APPLICATION_CREDENTIALS=" "$rc" 2>/dev/null; then
+      printf '\nexport GOOGLE_APPLICATION_CREDENTIALS="%s"\n' "$GCP_KEY_PATH" >> "$rc"
+      log "Added GOOGLE_APPLICATION_CREDENTIALS export to $rc"
+    fi
+  done
+  export GOOGLE_APPLICATION_CREDENTIALS="$GCP_KEY_PATH"
+else
+  log "SERVICE_ACCOUNT_KEY not set — skipping GCP credential setup."
+fi
+
 log "Dotfiles setup complete."
