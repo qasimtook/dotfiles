@@ -98,6 +98,7 @@ if [[ -n "${SERVICE_ACCOUNT_KEY:-}" ]]; then
 type = drive
 scope = drive
 service_account_file = $GCP_KEY_PATH
+shared_with_me = true
 EOF_RCLONE
     log "Configured rclone remote 'gdrive' via service account."
   fi
