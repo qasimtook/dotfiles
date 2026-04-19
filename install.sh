@@ -86,6 +86,22 @@ if [[ -n "${SERVICE_ACCOUNT_KEY:-}" ]]; then
       || log "gcloud service-account activation failed (non-fatal)."
   fi
 
+  # Configure rclone 'gdrive' remote using the same service account
+  if ! command -v rclone >/dev/null 2>&1; then
+    log "Installing rclone..."
+    curl -sSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1 || log "rclone install failed (non-fatal)."
+  fi
+  if command -v rclone >/dev/null 2>&1; then
+    mkdir -p "$HOME/.config/rclone"
+    cat > "$HOME/.config/rclone/rclone.conf" <<EOF_RCLONE
+[gdrive]
+type = drive
+scope = drive
+service_account_file = $GCP_KEY_PATH
+EOF_RCLONE
+    log "Configured rclone remote 'gdrive' via service account."
+  fi
+
   # Persist GOOGLE_APPLICATION_CREDENTIALS so gcloud/SDKs pick it up in new shells
   for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
     [[ -f "$rc" ]] || continue
